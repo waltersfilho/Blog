@@ -1,0 +1,38 @@
+<% @posts.each do |post| %>
+<div class="link row clearfix">
+  <div>
+    <h2>
+      <%= link_to post.title, post %><br>
+      <small class="author">Enviado há <%= time_ago_in_words(post.updated_at) %> atrás por <strong>
+        <% if post.user == current_user %>
+            você
+        <% else %>
+          <%= post.user.email %>
+        <%end%></strong>
+        </small>
+    </h2>
+  	<div class="lead">
+      <%= simple_format(truncate(strip_tags(post.body), length: 160)) %>
+  	</div>
+  </div>
+  <% if user_signed_in? %>
+  <div class="btn-group " role="group" aria-label="...">
+      <%= link_to like_post_path(post), method: :put, class: "btn btn-default" do %>
+        <span class="glyphicon glyphicon-thumbs-up"></span>
+        Like
+        <%= post.get_upvotes.size %>
+      <% end %>
+      <%= link_to dislike_post_path(post), method: :put, class: "btn btn-default " do %>
+        <span class="glyphicon glyphicon-thumbs-down"></span>
+        Dislike
+        <%= post.get_downvotes.size %>
+      <% end %>
+    <%if current_user == post.user%>
+      <%= link_to 'Editar Post', edit_post_path(post), class: 'btn btn-default' %>
+      <%= link_to 'Apagar Post'.html_safe, post, method: :delete, data: { confirm: 'Tem certeza?' }, class: 'btn btn-default' %>
+    <%end%>
+  </div>
+  <%end%>
+</div>
+
+<% end %>

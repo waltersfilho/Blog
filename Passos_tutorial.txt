@@ -1,0 +1,299 @@
+Neste tutorial aprenderemos adicionar a feature de like/dislike aos nossos modelos no RoR.
+
+Repositório da Gem acts_as_votable:
+https://github.com/ryanto/acts_as_votable
+
+Passo 1:
+Adicionar as seguintes linhas no Gemfile:
+# Gem de Like/Dislike
+gem 'acts_as_votable', '~> 0.10.0'
+
+Passo 2:
+Executar os seguintes comandos:
+bundle install
+rails g acts_as_votable:migration
+rake db:migrate
+
+Passo 3:
+Adicionar a seguinte linha de código no arquivo de modelo de todos os modelos onde vc deseja incluir Like/Dislike:
+acts_as_votable
+no caso do nosso blog, teremos Like/Dislike tanto para o post quanto para os comentários (arquivos app/models/post.rb e app/models/comment.rb)
+
+Passo 4:
+Criar rotas para ações de Like e Dislike em todos os recursos que tenham essa funcionalidade.
+No arquivo config/routes.rb
+resources :posts do
+    member do
+      put "like", to: "posts#upvote"
+      put "dislike", to: "posts#downvote"
+    end
+    resources :comments do
+      member do
+        put "like", to: "comments#upvote"
+        put "dislike", to: "comments#downvote"
+      end
+    end
+  end
+
+Passo 5:
+Adicionar as ações de Like e Dislike (upvote e downvote) nos controladores desejados.
+
+Arquivo app/controllers/posts_controller.rb
+class PostsController < ApplicationController
+  before_action :set_post, only: [:show, :edit, :update, :destroy, :upvote, :downvote]
+  before_action :authenticate_user!, except: [:show, :index, :upvote, :downvote]
+
+  #Garantindo que somente o dono de um Post pode executar as ações de edit, update e destroy
+  before_filter :require_permission, only: [:edit, :update, :destroy]
+
+  def upvote
+    @post.upvote_by current_user
+    redirect_to :back
+  end
+
+  def downvote
+    @post.downvote_from current_user
+    redirect_to :back
+  end
+
+  # GET /posts
+  # GET /posts.json
+  def index
+    @posts = Post.all
+  end
+
+  # GET /posts/1
+  # GET /posts/1.json
+  def show
+  end
+
+  # GET /posts/new
+  def new
+    #Cria post já associado ao usuário
+    @post = current_user.posts.build
+  end
+
+  # GET /posts/1/edit
+  def edit
+  end
+
+  # POST /posts
+  # POST /posts.json
+  def create
+    #Cria post já associado ao usuário
+    @post = current_user.posts.build(post_params)
+
+    respond_to do |format|
+      if @post.save
+        format.html { redirect_to posts_path, notice: 'Post criado com sucesso.' }
+        format.json { render :show, status: :created, location: @post }
+      else
+        format.html { render :new }
+        format.json { render json: @post.errors, status: :unprocessable_entity }
+      end
+    end
+  end
+
+  # PATCH/PUT /posts/1
+  # PATCH/PUT /posts/1.json
+  def update
+    respond_to do |format|
+      if @post.update(post_params)
+        format.html { redirect_to @post, notice: 'Post atualizado com sucesso.' }
+        format.json { render :show, status: :ok, location: @post }
+      else
+        format.html { render :edit }
+        format.json { render json: @post.errors, status: :unprocessable_entity }
+      end
+    end
+  end
+
+  # DELETE /posts/1
+  # DELETE /posts/1.json
+  def destroy
+    @post.destroy
+    respond_to do |format|
+      format.html { redirect_to posts_url, notice: 'Post apagado com sucesso.' }
+      format.json { head :no_content }
+    end
+  end
+
+  private
+    def require_permission
+      if current_user != Post.find(params[:id]).user
+        flash[:notice] = 'Permissões insuficientes!'
+        redirect_to root_path
+      end
+    end
+    # Use callbacks to share common setup or constraints between actions.
+    def set_post
+      @post = Post.find(params[:id])
+    end
+
+    # Never trust parameters from the scary internet, only allow the white list through.
+    def post_params
+      params.require(:post).permit(:title, :body)
+    end
+end
+
+
+Arquivo app/controllers/comments_controller.rb
+class CommentsController < ApplicationController
+  before_action :set_post, only: [:create]
+  before_action :set_comment, only: [:create, :destroy, :upvote, :downvote]
+  before_action :authenticate_user!
+
+  #Garantindo que somente o dono de um Post ou do Comentário pode pode executar a ação destroy
+  before_filter :require_permission, only: [:destroy]
+
+  def create
+    #Construção de um comentário dentro do post.
+    @comment = @post.comments.build(comment_params)
+    #associando o usuário ao comentário
+    @comment.user_id = current_user.id
+    @comment.save
+    redirect_to @post
+  end
+  def destroy
+    #Encontrando um comentário dentro do post.
+    @comment = @post.comments.find(params[:id])
+    @comment.destroy
+    redirect_to @post
+  end
+
+  def upvote
+    @comment.upvote_by current_user
+    redirect_to :back
+  end
+
+  def downvote
+    @comment.downvote_by current_user
+    redirect_to :back
+  end
+
+  private
+    def require_permission
+      set_comment
+      if (current_user != @post.user) and (current_user != @comment.user)
+        flash[:notice] = 'Permissões insuficientes!'
+        redirect_to @post
+      end
+    end
+    #precisamos encontrar o post para manipular o comentário dentro dele
+    def set_post
+      @post = Post.find(params[:post_id])
+    end
+
+    #precisamos encontrar o post para manipular o comentário dentro dele
+    def set_comment
+      set_post
+      @comment = @post.comments.find(params[:id])
+    end
+
+    #agora não precisamos mais do post_id. Ele é preenchido automaticamente.
+    def comment_params
+      params.require(:comment).permit(:message)
+    end
+end
+
+Passo 6:
+Adicionar os botões de Like e Dislike nas views, levando em conta que somente usuários autenticados poderão ver os botões.
+
+Arquivo app/views/posts/index.html.erb
+<% @posts.each do |post| %>
+<div class="link row clearfix">
+  <div>
+    <h2>
+      <%= link_to post.title, post %><br>
+      <small class="author">Enviado há <%= time_ago_in_words(post.updated_at) %> atrás por <strong>
+        <% if post.user == current_user %>
+            você
+        <% else %>
+          <%= post.user.email %>
+        <%end%></strong>
+        </small>
+    </h2>
+    <div class="lead">
+      <%= simple_format(truncate(strip_tags(post.body), length: 160)) %>
+    </div>
+  </div>
+  <% if user_signed_in? %>
+  <div class="btn-group " role="group" aria-label="...">
+      <%= link_to like_post_path(post), method: :put, class: "btn btn-default" do %>
+        <span class="glyphicon glyphicon-thumbs-up"></span>
+        Like
+        <%= post.get_upvotes.size %>
+      <% end %>
+      <%= link_to dislike_post_path(post), method: :put, class: "btn btn-default " do %>
+        <span class="glyphicon glyphicon-thumbs-down"></span>
+        Dislike
+        <%= post.get_downvotes.size %>
+      <% end %>
+    <%if current_user == post.user%>
+      <%= link_to 'Editar Post', edit_post_path(post), class: 'btn btn-default' %>
+      <%= link_to 'Apagar Post'.html_safe, post, method: :delete, data: { confirm: 'Tem certeza?' }, class: 'btn btn-default' %>
+    <%end%>
+  </div>
+  <%end%>
+</div>
+
+<% end %>
+
+Arquivo app/views/posts/show.html.erb
+<div class="page-header">
+    <h1>
+    <%= @post.title%><br>
+    <small class="author">Enviado há <%= time_ago_in_words(@post.updated_at) %> atrás por <strong>
+        <% if @post.user == current_user %>
+            você
+        <% else %>
+          <%= @post.user.email %>
+        <%end%></strong>
+        </small>
+    </h1>
+  <div class="lead">
+    <%= simple_format(@post.body) %>
+    <div class="btn-group" role="group" aria-label="...">
+      <% if user_signed_in? %>
+        <%= link_to like_post_path(@post), method: :put, class: "btn btn-default" do %>
+          <span class="glyphicon glyphicon-thumbs-up"></span>
+          Like
+          <%= @post.get_upvotes.size %>
+        <% end %>
+        <%= link_to dislike_post_path(@post), method: :put, class: "btn btn-default " do %>
+          <span class="glyphicon glyphicon-thumbs-down"></span>
+          Dislike
+          <%= @post.get_downvotes.size %>
+        <% end %>
+        <%if current_user == @post.user%>
+          <%= link_to 'Edit Post', edit_post_path(@post), class: 'btn btn-default' %>
+          <%= link_to 'Delete Post', @post, method: :delete, data: { confirm: 'Tem certeza?' }, class: 'btn btn-default' %>
+        <% end %>
+      <% end %>
+      <%= link_to 'Voltar', posts_path, class: 'btn btn-default' %>
+    </div>
+  </div>
+</div>
+
+<% c=@post.comments.count %>
+<h3 class="comments_title">
+  <%if c > 0 %>
+      <%= c %> 
+      <% if c > 1 %>
+        comentários
+      <% else %>
+        comentário
+      <% end %>
+  <%else%>
+      sem comentários
+  <%end%>
+</h3>
+  <div id="comments">
+    <%= render @post.comments %>
+    <%= render "comments/form" %>
+  </div>
+
+
+
+
+Arquivo app/views/comments/_comment.html.erb

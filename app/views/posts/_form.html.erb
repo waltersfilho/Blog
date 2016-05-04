@@ -1,0 +1,39 @@
+<%= form_for(@post) do |f| %>
+  <% if @post.errors.any? %>
+    <div id="error_explanation">
+      <h2><%= pluralize(@post.errors.count, "erro") %> impediram a gravação desse post:</h2>
+
+      <ul>
+      <% @post.errors.full_messages.each do |message| %>
+        <li><%= message %></li>
+      <% end %>
+      </ul>
+    </div>
+  <% end %>
+
+  <div class="field">
+    <%= f.label "Título" %><br>
+    <%= f.text_field :title, class: "form-control" %>
+  </div>
+  <div class="field">
+    <%= f.label "Corpo" %><br>
+    <%= f.text_area :body, class: "form-control" %>
+  </div>
+  <br>
+  <div class="btn-group" role="group" aria-label="...">
+    <%= button_tag(type: "submit", class: "btn btn-default btn-primary", name: "commit", value: "conceal") do %>
+      Salvar
+    <% end %> 
+    <% if @post.persisted? %>
+      <%= link_to 'Ver Post', @post, class: 'btn btn-default' %>
+    <% end %>
+    <%= link_to 'Voltar', posts_path, class: 'btn btn-default' %>
+  </div>
+<% end %>
+
+
+
+
+
+
+
